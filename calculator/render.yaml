@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: calculator-app
+    env: python
+    buildCommand: pip install poetry && poetry install
+    startCommand: poetry run python -m calculator.main
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.10.0
+    autoDeploy: true

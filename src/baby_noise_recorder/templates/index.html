@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ app_name }}</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <style>
+        .recording-pulse {
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        @keyframes pulse {
+            0%, 100% {
+                opacity: 1;
+            }
+            50% {
+                opacity: .5;
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <div class="container mx-auto px-4 py-8 max-w-md">
+        <h1 class="text-3xl font-bold text-center mb-8">{{ app_name }}</h1>
+        
+        <!-- Recording Controls -->
+        <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+            <div class="flex flex-col items-center">
+                <button id="recordButton" 
+                        class="w-24 h-24 rounded-full bg-red-500 hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-opacity-50 mb-4">
+                    <span class="sr-only">Record</span>
+                </button>
+                <div id="recordingStatus" class="text-gray-600 mb-2">Ready to record</div>
+                <div id="timer" class="text-xl font-mono">00:00</div>
+            </div>
+            
+            <!-- Label Input (shown when stopping recording) -->
+            <div id="labelInput" class="mt-4 hidden">
+                <input type="text" 
+                       id="recordingLabel" 
+                       placeholder="Enter a label for this recording"
+                       class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+            </div>
+        </div>
+
+        <!-- Recordings List -->
+        <div class="bg-white rounded-lg shadow-md p-6">
+            <h2 class="text-xl font-semibold mb-4">Recordings</h2>
+            <div id="recordingsList" class="space-y-4">
+                <!-- Recordings will be inserted here -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let ws;
+        let mediaRecorder;
+        let isRecording = false;
+        let startTime;
+        let timerInterval;
+
+        // Connect WebSocket
+        function connectWebSocket() {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
+            
+            ws.onmessage = function(event) {
+                const message = JSON.parse(event.data);
+                if (message.type === 'recording_saved') {
+                    loadRecordings();
+                }
+            };
+
+            ws.onerror = function(error) {
+                console.error('WebSocket error:', error);
+            };
+
+            ws.onclose = function() {
+                setTimeout(connectWebSocket, 1000);
+            };
+        }
+
+        // Initialize audio recording
+        async function initializeRecording() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                mediaRecorder = new MediaRecorder(stream);
+                
+                mediaRecorder.ondataavailable = function(event) {
+                    if (event.data.size > 0) {
+                        const reader = new FileReader();
+                        reader.onload = function() {
+                            if (ws && ws.readyState === WebSocket.OPEN) {
+                                ws.send(JSON.stringify({
+                                    type: 'audio_data',
+                                    data: reader.result
+                                }));
+                            }
+                        };
+                        reader.readAsBinaryString(event.data);
+                    }
+                };
+            } catch (error) {
+                console.error('Error accessing microphone:', error);
+                alert('Unable to access microphone. Please ensure microphone permissions are granted.');
+            }
+        }
+
+        // Update timer display
+        function updateTimer() {
+            const now = new Date();
+            const diff = Math.floor((now - startTime) / 1000);
+            const minutes = Math.floor(diff / 60).toString().padStart(2, '0');
+            const seconds = (diff % 60).toString().padStart(2, '0');
+            document.getElementById('timer').textContent = `${minutes}:${seconds}`;
+        }
+
+        // Start recording
+        async function startRecording() {
+            if (!mediaRecorder) {
+                await initializeRecording();
+            }
+
+            mediaRecorder.start(1000); // Send data every second
+            ws.send(JSON.stringify({
+                type: 'command',
+                action: 'start'
+            }));
+
+            isRecording = true;
+            startTime = new Date();
+            timerInterval = setInterval(updateTimer, 1000);
+            
+            document.getElementById('recordButton').classList.add('recording-pulse');
+            document.getElementById('recordingStatus').textContent = 'Recording...';
+            document.getElementById('labelInput').classList.add('hidden');
+        }
+
+        // Stop recording
+        function stopRecording() {
+            mediaRecorder.stop();
+            clearInterval(timerInterval);
+            
+            document.getElementById('labelInput').classList.remove('hidden');
+            document.getElementById('recordButton').classList.remove('recording-pulse');
+            document.getElementById('recordingStatus').textContent = 'Enter label for recording';
+            
+            const label = document.getElementById('recordingLabel').value;
+            ws.send(JSON.stringify({
+                type: 'command',
+                action: 'stop',
+                label: label
+            }));
+
+            isRecording = false;
+            document.getElementById('timer').textContent = '00:00';
+            document.getElementById('recordingLabel').value = '';
+        }
+
+        // Toggle recording
+        async function toggleRecording() {
+            if (!isRecording) {
+                await startRecording();
+            } else {
+                stopRecording();
+            }
+        }
+
+        // Load recordings list
+        async function loadRecordings() {
+            const response = await fetch('/api/recordings');
+            const recordings = await response.json();
+            
+            const recordingsList = document.getElementById('recordingsList');
+            recordingsList.innerHTML = recordings.map(recording => `
+                <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                    <div>
+                        <div class="font-medium">${recording.label || 'Untitled Recording'}</div>
+                        <div class="text-sm text-gray-500">
+                            ${new Date(recording.created_at).toLocaleString()}
+                        </div>
+                    </div>
+                    <div class="flex space-x-2">
+                        <audio src="/api/recordings/${recording.id}" controls class="h-8"></audio>
+                        <button onclick="deleteRecording('${recording.id}')"
+                                class="text-red-500 hover:text-red-700">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                                      d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Delete recording
+        async function deleteRecording(id) {
+            if (confirm('Are you sure you want to delete this recording?')) {
+                await fetch(`/api/recordings/${id}`, { method: 'DELETE' });
+                loadRecordings();
+            }
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            connectWebSocket();
+            loadRecordings();
+            document.getElementById('recordButton').addEventListener('click', toggleRecording);
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hello World from Comilla!</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: #000;
+        }
+        #container {
+            position: fixed;
+            width: 100%;
+            height: 100%;
+        }
+        .message {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-size: 3em;
+            font-family: Arial, sans-serif;
+            text-align: center;
+            opacity: 0;
+            transition: opacity 1s;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="container"></div>
+    <div class="message">Hello World, From Comilla!</div>
+    <script>
+        let scene, camera, renderer, earth;
+        const comillaCoords = {
+            latitude: 23.4607,
+            longitude: 91.1809
+        };
+
+        function init() {
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            document.getElementById('container').appendChild(renderer.domElement);
+
+            // Create Earth
+            const geometry = new THREE.SphereGeometry(5, 32, 32);
+            const texture = new THREE.TextureLoader().load('https://threejs.org/examples/textures/planets/earth_atmos_2048.jpg');
+            const material = new THREE.MeshPhongMaterial({
+                map: texture,
+                shininess: 0.2
+            });
+            earth = new THREE.Mesh(geometry, material);
+            scene.add(earth);
+
+            // Add ambient light
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+            scene.add(ambientLight);
+
+            // Add point light
+            const pointLight = new THREE.PointLight(0xffffff, 1);
+            pointLight.position.set(10, 10, 10);
+            scene.add(pointLight);
+
+            camera.position.z = 15;
+
+            animate();
+            startAnimation();
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            renderer.render(scene, camera);
+        }
+
+        async function startAnimation() {
+            // Initial spin (5 times)
+            for (let i = 0; i < 5; i++) {
+                await rotateEarth(2 * Math.PI);
+            }
+
+            // Zoom to Comilla
+            await zoomToLocation(comillaCoords);
+
+            // Show message
+            const message = document.querySelector('.message');
+            message.style.display = 'block';
+            setTimeout(() => {
+                message.style.opacity = '1';
+            }, 100);
+        }
+
+        function rotateEarth(angle) {
+            return new Promise(resolve => {
+                const duration = 2000; // 2 seconds per rotation
+                const startRotation = earth.rotation.y;
+                const startTime = Date.now();
+
+                function update() {
+                    const elapsed = Date.now() - startTime;
+                    const progress = elapsed / duration;
+
+                    if (progress < 1) {
+                        earth.rotation.y = startRotation + angle * progress;
+                        requestAnimationFrame(update);
+                    } else {
+                        earth.rotation.y = startRotation + angle;
+                        resolve();
+                    }
+                }
+
+                update();
+            });
+        }
+
+        function zoomToLocation(coords) {
+            return new Promise(resolve => {
+                const duration = 2000;
+                const startPos = { x: camera.position.x, y: camera.position.y, z: camera.position.z };
+                const startRot = earth.rotation.y;
+                
+                // Calculate target position
+                const phi = (90 - coords.latitude) * (Math.PI / 180);
+                const theta = (coords.longitude + 180) * (Math.PI / 180);
+                const targetRot = -theta;
+                
+                const radius = 8; // Closer zoom
+                const targetPos = {
+                    x: radius * Math.sin(phi) * Math.cos(theta),
+                    y: radius * Math.cos(phi),
+                    z: radius * Math.sin(phi) * Math.sin(theta)
+                };
+
+                const startTime = Date.now();
+
+                function update() {
+                    const elapsed = Date.now() - startTime;
+                    const progress = elapsed / duration;
+
+                    if (progress < 1) {
+                        camera.position.x = startPos.x + (targetPos.x - startPos.x) * progress;
+                        camera.position.y = startPos.y + (targetPos.y - startPos.y) * progress;
+                        camera.position.z = startPos.z + (targetPos.z - startPos.z) * progress;
+                        earth.rotation.y = startRot + (targetRot - startRot) * progress;
+                        camera.lookAt(scene.position);
+                        requestAnimationFrame(update);
+                    } else {
+                        camera.position.set(targetPos.x, targetPos.y, targetPos.z);
+                        earth.rotation.y = targetRot;
+                        camera.lookAt(scene.position);
+                        resolve();
+                    }
+                }
+
+                update();
+            });
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        init();
+    </script>
+</body>
+</html>

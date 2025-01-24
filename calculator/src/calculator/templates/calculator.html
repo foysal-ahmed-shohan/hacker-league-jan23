@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Calculator</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f0f2f5;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+        .calculator {
+            background-color: white;
+            padding: 2rem;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            max-width: 400px;
+        }
+        h1 {
+            text-align: center;
+            color: #1a73e8;
+            margin-bottom: 1.5rem;
+        }
+        .form-group {
+            margin-bottom: 1rem;
+        }
+        label {
+            display: block;
+            margin-bottom: 0.5rem;
+            color: #5f6368;
+        }
+        input[type="number"] {
+            width: 100%;
+            padding: 0.5rem;
+            border: 1px solid #dadce0;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        select {
+            width: 100%;
+            padding: 0.5rem;
+            border: 1px solid #dadce0;
+            border-radius: 4px;
+            background-color: white;
+        }
+        button {
+            width: 100%;
+            padding: 0.75rem;
+            background-color: #1a73e8;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 1rem;
+            margin-top: 1rem;
+        }
+        button:hover {
+            background-color: #1557b0;
+        }
+        .result {
+            margin-top: 1.5rem;
+            padding: 1rem;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+            text-align: center;
+        }
+        .success {
+            color: #1e8e3e;
+            font-weight: bold;
+        }
+        .error {
+            color: #d93025;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="calculator">
+        <h1>Calculator</h1>
+        <form action="/calculate" method="post">
+            <div class="form-group">
+                <label for="num1">First Number:</label>
+                <input type="number" id="num1" name="num1" step="any" required value="{{ num1 if num1 else '' }}">
+            </div>
+            <div class="form-group">
+                <label for="num2">Second Number:</label>
+                <input type="number" id="num2" name="num2" step="any" required value="{{ num2 if num2 else '' }}">
+            </div>
+            <div class="form-group">
+                <label for="operation">Operation:</label>
+                <select id="operation" name="operation" required>
+                    <option value="add" {% if operation == 'add' %}selected{% endif %}>Add (+)</option>
+                    <option value="subtract" {% if operation == 'subtract' %}selected{% endif %}>Subtract (-)</option>
+                    <option value="multiply" {% if operation == 'multiply' %}selected{% endif %}>Multiply (×)</option>
+                    <option value="divide" {% if operation == 'divide' %}selected{% endif %}>Divide (÷)</option>
+                </select>
+            </div>
+            <button type="submit">Calculate</button>
+        </form>
+        {% if result %}
+        <div class="result">
+            <span class="success">Result: {{ result }}</span>
+        </div>
+        {% endif %}
+        {% if error %}
+        <div class="result">
+            <span class="error">Error: {{ error }}</span>
+        </div>
+        {% endif %}
+    </div>
+</body>
+</html>
